@@ -1,0 +1,264 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      AIRFLOW_BASE_IMAGE: ${AIRFLOW_BASE_IMAGE}
+  image: ${AIRFLOW_IMAGE_NAME}
+  user: "${AIRFLOW_UID}:0"
+  environment: &airflow-env
+    TZ: ${VIETNAM_TIMEZONE}
+    PYTHONPATH: /opt/airflow:/opt/airflow/scripts
+
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: ${VIETNAM_TIMEZONE}
+    AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: ${VIETNAM_TIMEZONE}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres_airflow:5432/${AIRFLOW_DB_NAME}
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+
+    APP_DB_HOST: ${APP_DB_HOST}
+    APP_DB_PORT: ${APP_DB_PORT}
+    APP_DB_NAME: ${APP_DB_NAME}
+    APP_DB_USER: ${APP_DB_USER}
+    APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    APP_POSTGRES_CONN: ${APP_POSTGRES_CONN}
+
+    MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+    MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW}
+    MINIO_SECURE: ${MINIO_SECURE}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
+    - ./sql:/opt/airflow/sql
+    - ./data:/opt/airflow/data
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  networks:
+    - de_network
+
+
+services:
+  postgres_airflow:
+    image: postgres:16
+    container_name: postgres_airflow
+    restart: always
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+    ports:
+      - "${AIRFLOW_DB_HOST_PORT}:5432"
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER} -d ${AIRFLOW_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - de_network
+
+
+  postgres_oltp:
+    image: postgres:16
+    container_name: postgres_oltp
+    restart: always
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      POSTGRES_USER: ${APP_DB_USER}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_DB: ${APP_DB_NAME}
+    ports:
+      - "${APP_DB_HOST_PORT}:5432"
+    volumes:
+      - postgres_oltp_data:/var/lib/postgresql/data
+      - ./sql:/sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - de_network
+
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_HOST_PORT}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - de_network
+
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/${MINIO_BUCKET_RAW};
+      mc anonymous set none local/${MINIO_BUCKET_RAW};
+      echo 'MinIO bucket is ready: ${MINIO_BUCKET_RAW}';
+      "
+    networks:
+      - de_network
+
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: always
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "${PGADMIN_HOST_PORT}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres_oltp:
+        condition: service_healthy
+      postgres_airflow:
+        condition: service_healthy
+    networks:
+      - de_network
+
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+      postgres_oltp:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    command: >
+      bash -c "airflow db migrate &&
+      (airflow users create --username ${AIRFLOW_ADMIN_USERNAME} --password ${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname User --role Admin --email ${AIRFLOW_ADMIN_EMAIL} || true)"
+
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "${AIRFLOW_WEBSERVER_HOST_PORT}:8080"
+    command: airflow webserver
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    command: airflow scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+
+  superset-init:
+    image: ${SUPERSET_IMAGE}
+    container_name: superset_init
+    user: root
+    depends_on:
+      postgres_oltp:
+        condition: service_healthy
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+    volumes:
+      - superset_home:/app/superset_home
+    command: >
+      /bin/sh -c "pip install --no-cache-dir psycopg2-binary==2.9.10 &&
+      superset db upgrade &&
+      (superset fab create-admin --username ${SUPERSET_ADMIN_USERNAME} --firstname ${SUPERSET_ADMIN_FIRSTNAME} --lastname ${SUPERSET_ADMIN_LASTNAME} --email ${SUPERSET_ADMIN_EMAIL} --password ${SUPERSET_ADMIN_PASSWORD} || true) &&
+      superset init"
+    networks:
+      - de_network
+
+
+  superset:
+    image: ${SUPERSET_IMAGE}
+    container_name: superset
+    restart: always
+    user: root
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+      postgres_oltp:
+        condition: service_healthy
+    environment:
+      TZ: ${VIETNAM_TIMEZONE}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    ports:
+      - "${SUPERSET_HOST_PORT}:8088"
+    volumes:
+      - superset_home:/app/superset_home
+    command: >
+      /bin/sh -c "pip install --no-cache-dir psycopg2-binary==2.9.10 &&
+      superset run -h 0.0.0.0 -p 8088 --with-threads"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8088/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    networks:
+      - de_network
+
+
+volumes:
+  postgres_airflow_data:
+  postgres_oltp_data:
+  minio_data:
+  pgadmin_data:
+  superset_home:
+
+
+networks:
+  de_network:
+    driver: bridge
