@@ -4,7 +4,7 @@
 
 ### My study and internship experience at VCCorp
 
-📌 *Data Engineering Track – ETL, Pipeline, Data Warehouse*
+📌 *Data Engineering Track – ETL, ELT Pipeline, Data Warehouse/LakeHouse*
 
 </div>
 
