@@ -1,9 +1,4 @@
 x-airflow-common: &airflow-common
-  build:
-    context: .
-    dockerfile: Dockerfile
-    args:
-      AIRFLOW_BASE_IMAGE: ${AIRFLOW_BASE_IMAGE}
   image: ${AIRFLOW_IMAGE_NAME}
   user: "${AIRFLOW_UID}:0"
   environment: &airflow-env
@@ -31,6 +26,7 @@ x-airflow-common: &airflow-common
     MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
     MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW}
     MINIO_SECURE: ${MINIO_SECURE}
+
   volumes:
     - ./dags:/opt/airflow/dags
     - ./scripts:/opt/airflow/scripts
@@ -38,6 +34,7 @@ x-airflow-common: &airflow-common
     - ./data:/opt/airflow/data
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+
   networks:
     - de_network
 
@@ -242,11 +239,6 @@ services:
     command: >
       /bin/sh -c "pip install --no-cache-dir psycopg2-binary==2.9.10 &&
       superset run -h 0.0.0.0 -p 8088 --with-threads"
-    healthcheck:
-      test: ["CMD-SHELL", "curl --fail http://localhost:8088/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
     networks:
       - de_network
 
