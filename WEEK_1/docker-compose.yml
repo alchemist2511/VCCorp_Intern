@@ -1,5 +1,11 @@
 x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      AIRFLOW_BASE_IMAGE: ${AIRFLOW_BASE_IMAGE}
   image: ${AIRFLOW_IMAGE_NAME}
+  pull_policy: build
   user: "${AIRFLOW_UID}:0"
   environment: &airflow-env
     TZ: ${VIETNAM_TIMEZONE}
