@@ -131,18 +131,16 @@ services:
       - de_network
 
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
+  cloudbeaver:
+    image: ${CLOUDBEAVER_IMAGE}
+    container_name: cloudbeaver
     restart: always
     environment:
       TZ: ${VIETNAM_TIMEZONE}
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
-      - "${PGADMIN_HOST_PORT}:80"
+      - "${CLOUDBEAVER_HOST_PORT}:8978"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
     depends_on:
       postgres_oltp:
         condition: service_healthy
@@ -253,7 +251,7 @@ volumes:
   postgres_airflow_data:
   postgres_oltp_data:
   minio_data:
-  pgadmin_data:
+  cloudbeaver_data:
   superset_home:
 
 
