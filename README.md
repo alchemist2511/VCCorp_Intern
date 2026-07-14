@@ -21,7 +21,7 @@
 | 📊 | **BI & Analytics** | ![Superset](https://img.shields.io/badge/Apache_Superset-20A6C9?style=flat-square) 
 | 🚀 | **CI/CD & GitOps** | ![Git](https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white) |
 | 📁 | **Project & Knowledge** | ![Notion](https://img.shields.io/badge/Notion-000000?style=flat-square&logo=notion&logoColor=white)
-| 💻 | **IDE & Data Tools** | ![VS Code](https://img.shields.io/badge/VS_Code-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white) ![DBeaver](https://img.shields.io/badge/DBeaver-382923?style=flat-square) !
+| 💻 | **IDE & Data Tools** | ![VS Code](https://img.shields.io/badge/VS_Code-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white) ![DBeaver](https://img.shields.io/badge/DBeaver-382923?style=flat-square) 
 
 ---
 
