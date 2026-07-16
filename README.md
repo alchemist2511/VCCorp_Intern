@@ -42,7 +42,7 @@ Repo này ghi lại quá trình học tập và thực tập của mình tại *
 | Tuần | Nội dung | Ghi chú |
 |---|---|---|
 | Tuần 1 | Onboarding, làm quen với các công nghệ + nền tảng cốt lõi của DE | |
-|  |
+| Tuần 2 | Học và làm các khái niệm cở bản về RDBMS,NOSQL,OLAP, OLTP,.... | |
 | ... | ... | |
 
 ## 🙌 Lời cảm ơn
@@ -54,3 +54,4 @@ Cảm ơn team Data tại VCCorp đã hướng dẫn và hỗ trợ trong suốt
 <div align="center">
 Made with ❤️ during my internship at VCCorp
 </div>
+
